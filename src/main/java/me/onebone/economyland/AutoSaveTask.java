@@ -1,14 +1,17 @@
 package me.onebone.economyland;
 
-import cn.nukkit.scheduler.PluginTask;
+import cn.nukkit.scheduler.Task;
 
-public class AutoSaveTask extends PluginTask<EconomyLand>{
+public class AutoSaveTask extends Task {
+
+	private EconomyLand plugin;
+
 	public AutoSaveTask(EconomyLand plugin){
-		super(plugin);
+		this.plugin = plugin;
 	}
 
 	@Override
 	public void onRun(int currentTick){
-		this.getOwner().save();
+		this.plugin.provider.save();
 	}
 }

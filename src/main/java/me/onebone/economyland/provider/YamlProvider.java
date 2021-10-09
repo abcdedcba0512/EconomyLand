@@ -48,7 +48,7 @@ public class YamlProvider implements Provider{
 	private int landId = 0;
 	
 	private File file;
-	private Map<Integer, Land> lands;
+	public Map<Integer, Land> lands;
 	private EconomyLand plugin;
 	
 	@SuppressWarnings("unchecked")
@@ -104,8 +104,12 @@ public class YamlProvider implements Provider{
 
 	@Override
 	public int addLand(Vector2 start, Vector2 end, Level level, double price, String owner){
-		lands.put(landId, new Land(landId, start, end, level, level.getFolderName(), price, owner, new HashMap<String, Object>(),
-				new ArrayList<String>()));
+		lands.put(landId, new Land(landId, start, end, level, level.getFolderName(), price, owner, new HashMap<String, Object>(){{
+			put("pvp", false);
+			put("pickup", true);
+			put("access", true);
+			put("hide", false);
+		}}, new ArrayList<String>()));
 		return landId++;
 	}
 
@@ -113,7 +117,6 @@ public class YamlProvider implements Provider{
 	public boolean removeLand(int id){
 		if(lands.containsKey(id)){
 			lands.remove(id);
-			
 			return true;
 		}
 		return false;
@@ -231,7 +234,7 @@ public class YamlProvider implements Provider{
 	@Override
 	public boolean setOption(int id, String option, Object value){
 		if(this.lands.containsKey(id)){
-			this.lands.get(id).setOption(option, value);
+			this.lands.get(id).setOption(option, (boolean)value);
 			return true;
 		}
 		return false;
@@ -259,25 +262,24 @@ public class YamlProvider implements Provider{
 					
 					put("invitee", land.getInvitee());
 					
-					Map<String, Object> options = land.getOptions();
+					/*Map<String, Boolean> options = land.getOptions();
 					
 					Map<String, Object> defaults = new HashMap<String, Object>(){
 						{
 							put("pvp", false);
-							put("pickup", false);
+							put("pickup", true);
 							put("access", true);
 							put("hide", false);
-							put("message", null);
 						}
 					};
-					for(String option : new String[]{"pvp", "pickup", "access", "hide", "message"}){
+					for(String option : new String[]{"pvp", "pickup", "access", "hide"}){
 						Object val = options.get(option);
 						
 						if(val == null || val.equals(defaults.get(option))){
 							options.remove(option);
 						}
-					}
-					put("options", options);
+					}*/
+					put("options", land.getOptions());
 				}
 			});
 		});

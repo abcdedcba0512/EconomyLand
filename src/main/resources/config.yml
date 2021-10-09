@@ -1,7 +1,7 @@
 # Your preferred language (eng, kor, jpn, chs)
 language: eng
 
-max-land: NaN
+minimum-land: 25
 query-min-length: 3
 price:
   per-block: 100
@@ -12,7 +12,7 @@ white-world-protection: []
 show-white-world-message: true
 
 # Worlds which are forbidden to buy
-buy-forbidden: []
+buy-enable-worlds: []
 
 # Prevent liquid from flowing to other land
 block-flowing: true

@@ -1,0 +1,4 @@
+<factorypath>
+    <factorypathentry kind="VARJAR" id="M2_REPO/cn/nukkit/nukkit/1.0-SNAPSHOT/nukkit-1.0-SNAPSHOT.jar" enabled="true" runInBatchMode="false"/>
+    <factorypathentry kind="VARJAR" id="M2_REPO/me/onebone/economyapi/1.0.0/economyapi-1.0.0.jar" enabled="true" runInBatchMode="false"/>
+</factorypath>

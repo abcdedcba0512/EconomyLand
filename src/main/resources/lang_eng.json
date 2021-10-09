@@ -5,7 +5,7 @@
 	"must-one-world": "&4You must set position in same world.",
 	"pos-not-set": "&4Positions are not set correctly.",
 	"land-overlap": "&4You are trying to overlap with land &b#{0}&f which &2{1}&f owns.",
-	"max-land-count": "&4You have reached max count ({0}) of land.",
+	"minimum-land-count": "&4You have reached max count ({0}) of land.",
 	"no-money": "&4You don't have enough money to buy land.",
 	"failed-buying": "&4Failed buying land.",
 	"buying-forbidden": "&4You cannot buy land of this world.",
@@ -32,7 +32,6 @@
 	"option-set": "Option {0} was set to {1}.",
 	"options-tag": "Option values of &b#{0}:",
 	"land-message": "&b#{0}&f says: &e{1}",
-	
 	"modify-forbidden": "&4#{0}: Here is {1}'s land. You cannot modify here.",
 	"modify-whiteland": "&4You have to buy here to modify here.",
 	"access-forbidden": "&4#{0}: Here is {1}'s land. You cannot access here.",

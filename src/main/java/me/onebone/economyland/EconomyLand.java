@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
@@ -42,8 +43,11 @@ import cn.nukkit.entity.item.EntityItem;
 import cn.nukkit.event.EventHandler;
 import cn.nukkit.event.Listener;
 import cn.nukkit.event.block.BlockBreakEvent;
+import cn.nukkit.event.block.BlockPistonEvent;
 import cn.nukkit.event.block.BlockPlaceEvent;
 import cn.nukkit.event.block.BlockUpdateEvent;
+import cn.nukkit.event.entity.EntityDamageByEntityEvent;
+import cn.nukkit.event.entity.EntityDamageEvent;
 import cn.nukkit.event.inventory.InventoryPickupItemEvent;
 import cn.nukkit.event.player.PlayerInteractEvent;
 import cn.nukkit.event.player.PlayerMoveEvent;
@@ -52,27 +56,35 @@ import cn.nukkit.item.Item;
 import cn.nukkit.lang.TranslationContainer;
 import cn.nukkit.level.Level;
 import cn.nukkit.level.Position;
+import cn.nukkit.math.BlockFace;
 import cn.nukkit.math.Vector2;
 import cn.nukkit.math.Vector3;
-import cn.nukkit.network.protocol.UpdateBlockPacket;
-import cn.nukkit.network.protocol.UpdateBlockPacket.Entry;
 import cn.nukkit.plugin.PluginBase;
 import cn.nukkit.utils.TextFormat;
 import cn.nukkit.utils.Utils;
+import me.onebone.economyapi.EconomyAPI;
 import me.onebone.economyland.error.LandCountMaximumException;
 import me.onebone.economyland.error.LandOverlapException;
-import me.onebone.economyland.provider.*;
-import me.onebone.economyapi.EconomyAPI;
+import me.onebone.economyland.provider.Provider;
+import me.onebone.economyland.provider.YamlProvider;
 
 public class EconomyLand extends PluginBase implements Listener{
+
+
 	private EconomyAPI api;
 	
-	private Provider provider;
+	public Provider provider;
+
+	private static EconomyLand instance;
 	
 	private Map<Player, Position[]> players;
 	private PlayerManager manager;
 	private List<Player> removes, placeQueue;
 	private Map<String, String> lang;
+
+	public static EconomyLand getInstance() {
+		return instance;
+	}
 	
 	public int addLand(Position start, Position end, Level level, String owner) throws LandOverlapException, LandCountMaximumException{
 		return addLand(start, end, level, owner, 0.0);
@@ -88,21 +100,22 @@ public class EconomyLand extends PluginBase implements Listener{
 			throw new LandOverlapException("Land is overlapping", land);
 		}
 		
-		int max = Integer.MAX_VALUE;
+		int minimum = Integer.MAX_VALUE;
 		try{
-			if(this.getConfig().isInt("max-land")){
-				max = this.getConfig().get("max-land", 1);	
+			if(this.getConfig().isInt("minimum-land")){
+				minimum = this.getConfig().get("minimum-land", 1);	
 			}else{
-				max = Integer.parseInt(this.getConfig().get("max-land", "NaN").toString());
+				minimum = Integer.parseInt(this.getConfig().get("minimum-land", "NaN").toString());
 			}
 		}catch(NumberFormatException e){}
 		
-		long count = this.provider.getAll().values().stream().filter((l) -> l.getOwner().equalsIgnoreCase(owner)).count();
-		if(count >= max){
-			throw new LandCountMaximumException("Land is now maximum", max);
+		//long count = this.provider.getAll().values().stream().filter((l) -> l.getOwner().equalsIgnoreCase(owner)).count();
+		double area = price / this.getConfig().getDouble("price.per-block", 100D);
+		if(area < minimum){
+			throw new LandCountMaximumException("Land is now maximum", minimum);
 		}
 		
-		return this.provider.addLand(new Vector2(start.x, start.z), new Vector2(end.x, end.z), level, 0, owner);
+		return this.provider.addLand(new Vector2(start.x, start.z), new Vector2(end.x, end.z), level, price, owner);
 	}
 	
 	public Land checkOverlap(Position start, Position end){
@@ -165,6 +178,7 @@ public class EconomyLand extends PluginBase implements Listener{
 	public void onEnable(){
 		this.saveDefaultConfig();
 		
+		instance = this;
 		players = new HashMap<>();
 		removes = new ArrayList<Player>();
 		placeQueue = new LinkedList<Player>();
@@ -203,16 +217,14 @@ public class EconomyLand extends PluginBase implements Listener{
 		this.provider = new YamlProvider(this, new File(this.getDataFolder(), "Land.yml"));
 		
 		this.getServer().getScheduler().scheduleDelayedRepeatingTask(new ShowBlockTask(this), 20, 20);
-		int interval = this.getConfig().getInt("auto-save", 300) * 1200;
-		this.getServer().getScheduler().scheduleDelayedRepeatingTask(new AutoSaveTask(this), interval, interval);
+		this.getServer().getScheduler().scheduleDelayedRepeatingTask(new AutoSaveTask(this), 1200, 1200);
 		this.getServer().getPluginManager().registerEvents(this, this);
 	}
 	
 	@Override
 	public void onDisable(){
-		if(this.provider != null){
-			this.provider.close();
-		}
+		this.provider.save();
+		this.provider.close();
 	}
 	
 	public boolean onCommand(CommandSender sender, Command command, String label, String[] args){
@@ -238,10 +250,10 @@ public class EconomyLand extends PluginBase implements Listener{
 				if(!players.containsKey(player)){
 					players.put(player, new Position[2]);
 				}
-				players.get(player)[0] = new Position(player.x, player.y, player.z, player.level);
+				players.get(player)[0] = player.getPosition();
 				
 				sender.sendMessage(this.getMessage("pos1-set", new Object[]{
-						(int) player.x, (int) player.y, (int) player.z
+						player.getFloorX(), player.getFloorY(), player.getFloorZ()
 				}));
 			}else if(args[0].equals("pos2")){
 				if(!(sender instanceof Player)){
@@ -265,12 +277,12 @@ public class EconomyLand extends PluginBase implements Listener{
 					sender.sendMessage(this.getMessage("must-one-world"));
 					return true;
 				}
-				players.get(player)[1] = new Position(player.x, player.y, player.z, player.level);
+				players.get(player)[1] = player.getPosition();
 
-				double price = (Math.abs(Math.floor(player.x) - Math.floor(pos1.x)) + 1) * (Math.abs(Math.floor(player.y) - Math.floor(pos1.y)) + 1) * this.getConfig().getDouble("price.per-block", 100D);
+				double price = (Math.abs(player.getFloorX() - pos1.getFloorX()) + 1) * (Math.abs(player.getFloorZ() - pos1.getFloorZ()) + 1) * this.getConfig().getDouble("price.per-block", 100D);
 				
 				sender.sendMessage(this.getMessage("pos2-set", new Object[]{
-						(int) player.x, (int) player.y, (int) player.z, price
+						player.getFloorX(), player.getFloorY(), player.getFloorZ(), price
 				}));
 			}else if(args[0].equals("buy")){
 				if(!(sender instanceof Player)){
@@ -297,26 +309,26 @@ public class EconomyLand extends PluginBase implements Listener{
 					return true;
 				}
 				
-				if(this.getConfig().get("buy-forbidden", new ArrayList<String>()).contains(pos1.level.getFolderName())){
+				if(!this.getConfig().get("buy-enable-worlds", new ArrayList<String>()).contains(pos1.level.getFolderName())){
 					sender.sendMessage(this.getMessage("buying-forbidden"));
 					
 					removes.add(player);
 					return true;
 				}
 				
-				double price = (Math.abs(Math.floor(player.x) - Math.floor(pos1.x)) + 1) * (Math.abs(Math.floor(player.y) - Math.floor(pos1.y)) + 1) * this.getConfig().getDouble("price.per-block", 100D);
+				double price = (Math.abs(player.getFloorX() - pos1.getFloorX()) + 1) * (Math.abs(player.getFloorZ() - pos1.getFloorZ()) + 1) * this.getConfig().getDouble("price.per-block", 100D);
 				if(this.api.myMoney(player) >= price){
 					try{
-						this.addLand(pos1, pos2, pos1.level, player.getName());
-						this.api.reduceMoney(player, price, true);
+						int id = this.addLand(pos1, pos2, pos1.level, player.getName(), price);
+						this.api.reduceMoney(player, price);
 						
-						sender.sendMessage(this.getMessage("bought-land"));
+						sender.sendMessage(this.getMessage("bought-land", new Object[]{id}));
 					}catch(LandOverlapException e){
 						sender.sendMessage(this.getMessage("land-overlap", new Object[]{
 							e.overlappingWith().getId(), e.overlappingWith().getOwner()
 						}));
 					}catch(LandCountMaximumException e){
-						sender.sendMessage(this.getMessage("max-land-count", new Object[]{e.getMax()}));
+						sender.sendMessage(this.getMessage("minimum-land-count", new Object[]{e.getMax()}));
 					}
 				}else{
 					sender.sendMessage(this.getMessage("no-money"));
@@ -330,7 +342,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				
 				if(args.length < 2){
-					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.usage", "/land sell <id>"));
+					sender.sendMessage(new TranslationContainer("§c使い方: /land sell <土地番号>"));
 					return true;
 				}
 				
@@ -389,7 +401,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				
 				if(args.length < 3){
-					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.usage", "/land give <id> <player>"));
+					sender.sendMessage(new TranslationContainer("§c使い方: /land give <土地番号> <プレイヤー>"));
 					return true;
 				}
 				
@@ -490,7 +502,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				
 				if(args.length < 2){
-					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.usage", command.getUsage()));
+					sender.sendMessage(new TranslationContainer("§c使い方: /land move <土地番号>"));
 					return true;
 				}
 				
@@ -532,7 +544,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				
 				if(args.length < 3){
-					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.usage", "/land invite <id> <player>"));
+					sender.sendMessage(new TranslationContainer("§c使い方: /land invite <土地番号> <プレイヤー>"));
 					return true;
 				}
 				
@@ -568,7 +580,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				
 				if(args.length < 3){
-					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.usage", "/land kick <id> <player>"));
+					sender.sendMessage(new TranslationContainer("§c使い方: /land kick <id> <player>"));
 					return true;
 				}
 				
@@ -603,7 +615,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				
 				if(args.length < 2){
-					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.usage", "/land invitee <id>"));
+					sender.sendMessage(new TranslationContainer("§c使い方: /land invitee <土地番号>"));
 					return true;
 				}
 				
@@ -629,7 +641,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				
 				if(args.length < 4){
-					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.usage", "/land option <id> <option> <value...>"));
+					sender.sendMessage(new TranslationContainer("§c使い方: /land option <id> <option> <value...>"));
 					return true;
 				}
 				
@@ -655,13 +667,9 @@ public class EconomyLand extends PluginBase implements Listener{
 					case "pvp":
 						switch(value){
 						case "true":
-						case "t":
-						case "on":
 							this.provider.setOption(id, option, true);
-						break;
+							break;
 						case "false":
-						case "f":
-						case "off":
 							this.provider.setOption(id, option, false);
 							break;
 						default:
@@ -674,65 +682,52 @@ public class EconomyLand extends PluginBase implements Listener{
 					case "pickup":
 						switch(value){
 						case "true":
-						case "t":
-						case "on":
 							this.provider.setOption(id, option, true);
 						break;
 						case "false":
-						case "f":
-						case "off":
 							this.provider.setOption(id, option, false);
 							break;
 						default:
 							sender.sendMessage(this.getMessage("invalid-value"));
 							return true;
 						}
+						sender.sendMessage(this.getMessage("option-set", new Object[]{option, value}));
 						return true;
 					case "access":
 						switch(value){
 						case "true":
-						case "t":
-						case "on":
 							this.provider.setOption(id, option, true);
-						break;
+							break;
 						case "false":
-						case "f":
-						case "off":
 							this.provider.setOption(id, option, false);
 							break;
 						default:
 							sender.sendMessage(this.getMessage("invalid-valid"));
 							return true;
 						}
-						
 						sender.sendMessage(this.getMessage("option-set", new Object[]{option, value}));
 						return true;
 					case "hide":
 						switch(value){
 						case "true":
-						case "t":
-						case "on":
 							this.provider.setOption(id, option, true);
-						break;
+							break;
 						case "false":
-						case "f":
-						case "off":
 							this.provider.setOption(id, option, false);
 							break;
 						default:
 							sender.sendMessage(this.getMessage("invalid-value"));
 							return true;
 						}
-						
 						sender.sendMessage(this.getMessage("option-set", new Object[]{option, value}));
 						return true;
-					case "message":
+					/*case "message":
 						this.provider.setOption(id, option, value);
 						
 						sender.sendMessage(this.getMessage("option-set", new Object[]{option, value}));
-						return true;
+						return true;*/
 					default:
-						sender.sendMessage(this.getMessage("invalid-option", new Object[]{"pvp, pickup, access, hide, message"}));
+						sender.sendMessage(this.getMessage("invalid-option", new Object[]{"pvp, pickup, access, hide"}));
 						return true;
 					}
 				}else{
@@ -745,7 +740,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				
 				if(args.length < 2){
-					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.usage", "/land options <id>"));
+					sender.sendMessage(new TranslationContainer("§c使い方: /land options <土地番号>"));
 					return true;
 				}
 				
@@ -765,10 +760,12 @@ public class EconomyLand extends PluginBase implements Listener{
 				
 				StringBuilder builder = new StringBuilder(this.getMessage("options-tag", new Object[]{id}) + "\n");
 				
-				Map<String, Object> options = land.getOptions();
+				Map<String, Boolean> options = land.getOptions();
 				for(String option : options.keySet()){
-					builder.append(TextFormat.GREEN + option + TextFormat.WHITE + "> " + TextFormat.AQUA + options.get(option) + "\n");
+					builder.append("§a" + option + TextFormat.WHITE + ": "+ options.get(option).toString() + "\n");
 				}
+				System.out.println("Options: "+land.getOptions());
+				System.out.println("Invitee: "+land.getInvitee());
 				
 				sender.sendMessage(builder.substring(0, builder.length() - 1));
 			}else{
@@ -788,7 +785,7 @@ public class EconomyLand extends PluginBase implements Listener{
 		Land land;
 		if((land = this.provider.findLand(block)) != null){
 			if(!(land.hasPermission(player) || player.hasPermission("economyland.admin.modify"))){
-				player.sendMessage(this.getMessage("modify-forbidden", new Object[]{
+				player.sendTip(this.getMessage("modify-forbidden", new Object[]{
 						land.getId(), land.getOwner()
 				}));
 				
@@ -796,7 +793,7 @@ public class EconomyLand extends PluginBase implements Listener{
 			}
 		}else if(this.getConfig().getStringList("white-world-protection").contains(block.level.getFolderName()) && !player.hasPermission("economyland.admin.modify")){
 			if(this.getConfig().getBoolean("show-white-world-message", true)){
-				player.sendMessage(this.getMessage("modify-whiteland"));
+				player.sendTip(this.getMessage("modify-whiteland"));
 			}
 			
 			event.setCancelled();
@@ -806,10 +803,24 @@ public class EconomyLand extends PluginBase implements Listener{
 	@EventHandler (ignoreCancelled = true)
 	public void onBlockUpdate(BlockUpdateEvent event){
 		Block block = event.getBlock();
-		
 		if(this.getConfig().get("block-flowing", true) && block instanceof BlockLiquid){
 			if(!this.provider.canUpdate(block)){
-				event.setCancelled(true);
+				event.setCancelled();
+			}
+		}
+	}
+
+	@EventHandler (ignoreCancelled = true)
+	public void BlockPistonEvent(BlockPistonEvent event) {
+		if(event.getDirection().getAxis() == BlockFace.Axis.Y) return;
+		Vector3 add = event.isExtending() ? event.getDirection().getUnitVector() : event.getDirection().rotateY().rotateY().getUnitVector();
+		Block piston = event.getBlock();
+		List<Block> blocks = event.getBlocks();
+		blocks.addAll(event.getDestroyedBlocks());
+		if(blocks.size() == 0) blocks.add(piston);
+		for(Block block: blocks) {
+			if(!Objects.equals(this.provider.findLand(block) != null ? this.provider.findLand(block).getOwner() : null, this.provider.findLand(block.add(add)) != null ? this.provider.findLand(block.add(add)).getOwner() : null)) {
+				event.setCancelled();
 			}
 		}
 	}
@@ -821,28 +832,28 @@ public class EconomyLand extends PluginBase implements Listener{
 		Player player = event.getPlayer();
 		Block block = event.getBlock();
 		Item item = event.getItem();
-		
-		if(item.canBePlaced() && !block.canBeActivated() && event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK){ // placing
-			block = block.getSide(event.getFace());
+		if(event.getAction() != PlayerInteractEvent.Action.PHYSICAL) {
+			if(item.canBePlaced() && !block.canBeActivated() && event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK){ // placing
+				block = block.getSide(event.getFace());
+			}
 		}
 		
 		Land land;
 		if((land = this.provider.findLand(block)) != null){
 			if(!(land.hasPermission(player) || player.hasPermission("economyland.admin.modify"))){
-				event.setCancelled(true);
-				
-				player.sendMessage(this.getMessage("modify-forbidden", new Object[]{
+				event.setCancelled();
+				/*player.sendTip(this.getMessage("modify-forbidden", new Object[]{
 						land.getId(), land.getOwner()
-				}));
+				}));*/
 				
 				if(event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK && !block.canBeActivated() && event.getItem().canBePlaced()){
 					this.placeQueue.add(player);
 				}
 			}
 		}else if(this.getConfig().getStringList("white-world-protection").contains(block.level.getFolderName()) && !player.hasPermission("economyland.admin.modify")){
-			event.setCancelled(true);
+			event.setCancelled();
 			if(this.getConfig().getBoolean("show-white-world-message", true)){
-				player.sendMessage(this.getMessage("modify-whiteland"));
+				player.sendTip(this.getMessage("modify-whiteland"));
 			}
 			
 			if(event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK && !block.canBeActivated() && event.getItem().canBePlaced()){
@@ -857,7 +868,6 @@ public class EconomyLand extends PluginBase implements Listener{
 		
 		if(this.placeQueue.contains(player)){
 			event.setCancelled();
-			
 			this.placeQueue.remove(player);
 		}
 	}
@@ -873,12 +883,12 @@ public class EconomyLand extends PluginBase implements Listener{
 			
 			if(lastPickup == null || (lastPickup[1] == item.getId() && now - lastPickup[0] > 2000) || lastPickup[1] != item.getId()){
 				Land land;
-				if((land = this.provider.findLand(item)) != null && !land.getOption("pickup", false)){
+				if((land = this.provider.findLand(item)) != null && !land.getOption("pickup", true)){
 					if(!(land.hasPermission(player) || player.hasPermission("economyland.admin.pickup"))){
 						event.setCancelled(true);
 						
 						if(lastPickup != null && now - lastPickup[0] > 2000){
-							player.sendMessage(this.getMessage("pickup-forbidden", new Object[]{
+							player.sendTip(this.getMessage("pickup-forbidden", new Object[]{
 									land.getId(), land.getOwner()
 							}));
 						}
@@ -901,24 +911,18 @@ public class EconomyLand extends PluginBase implements Listener{
 			if((land = this.provider.findLand(player)) != null){
 				if(!land.getOption("access", true)){
 					if(!(land.hasPermission(player) || player.hasPermission("economyland.admin.access"))){
+						if(player.getGamemode() != 0) return;
 						player.teleport(this.manager.getLastPosition(player));
-						
 						if(this.manager.canShow(player)){
-							player.sendMessage(this.getMessage("access-forbidden", new Object[]{
+							player.sendTip(this.getMessage("access-forbidden", new Object[]{
 								land.getId(), land.getOwner()
 							}));
-							
 							this.manager.setShown(player);
 						}
 						return;
 					}
 				}else{
 					if(this.manager.getLastLand(player) != land){
-						String message = land.getOption("message", null);
-						if(message != null && !message.equals("")){
-							player.sendMessage(this.getMessage("land-message", new Object[]{land.getId(), message}));
-						}
-						
 						this.manager.setLastLand(player, land);
 					}
 				}
@@ -926,6 +930,37 @@ public class EconomyLand extends PluginBase implements Listener{
 				this.manager.setLastLand(player, null);
 			}
 			this.manager.setPosition(player);
+		}
+	}
+
+	@EventHandler (ignoreCancelled = true)
+	public void onEntityDamage(EntityDamageEvent event) {
+		if(event instanceof EntityDamageByEntityEvent || event.getCause() == EntityDamageEvent.DamageCause.PROJECTILE) {
+			Land land;
+			if(!(((EntityDamageByEntityEvent)event).getDamager() instanceof Player)) return;
+			Player damager = (Player)(((EntityDamageByEntityEvent)event).getDamager());
+			if((land = this.provider.findLand(damager)) != null){
+				if(!land.getOption("pvp", false)) {
+					if((land.hasPermission(damager) || damager.hasPermission("economyland.admin.modify")) && !(event.getEntity() instanceof Player)) return;
+					event.setCancelled();
+					if(this.manager.canShow(damager)){
+						damager.sendTip("§c#"+land.getId()+"("+land.getOwner()+")では攻撃できません");
+						this.manager.setShown(damager);
+					}
+					return;
+				}else{
+					if(this.manager.getLastLand(damager) != land){
+						this.manager.setLastLand(damager, land);
+					}
+				}
+			}else if(this.getConfig().getStringList("white-world-protection").contains(damager.level.getFolderName()) && !damager.hasPermission("economyland.admin.modify")){
+				event.setCancelled();
+				if(this.getConfig().getBoolean("show-white-world-message", true)){
+					damager.sendTip(this.getMessage("modify-whiteland"));
+				}
+				this.manager.setLastLand(damager, null);
+			}
+			this.manager.setPosition(damager);
 		}
 	}
 	
@@ -937,7 +972,7 @@ public class EconomyLand extends PluginBase implements Listener{
 	}
 	
 	public void showBlocks(boolean show){
-		UpdateBlockPacket pk = new UpdateBlockPacket();
+		/*UpdateBlockPacket pk = new UpdateBlockPacket();
 		
 		for(Player player : players.keySet()){
 			Position[] pos = players.get(player);
@@ -983,7 +1018,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				players.remove(player);
 				removes.remove(player);
 			}
-		}
+		}*/
 	}
 	
 	public void save(){

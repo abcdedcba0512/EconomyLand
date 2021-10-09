@@ -39,7 +39,7 @@ public class PlayerManager{
 	
 	public boolean isMoved(Player player){
 		if(!lastPosition.containsKey(player)){
-			lastPosition.put(player, new Position(player.x, player.y, player.z, player.level));
+			lastPosition.put(player, player.getPosition());
 			return true;
 		}
 		
@@ -49,12 +49,12 @@ public class PlayerManager{
 	}
 	
 	public void setPosition(Player player){
-		lastPosition.put(player, new Position(player.x, player.y, player.z, player.level));
+		lastPosition.put(player, player.getPosition());
 	}
 	
 	public Position getLastPosition(Player player){
 		if(!lastPosition.containsKey(player)){
-			lastPosition.put(player, new Position(player.x, player.y, player.z, player.level));
+			lastPosition.put(player, player.getPosition());
 		}
 		
 		return lastPosition.get(player);

@@ -36,7 +36,7 @@ public class Land{
 	private double price;
 	private String owner;
 	
-	private Map<String, Object> options;
+	private Map<String, Boolean> options;
 	private List<String> invitee;
 	
 	public Land(int id, Vector2 start, Vector2 end, Level level, String levelName, double price, String owner, 
@@ -69,19 +69,18 @@ public class Land{
 		this.level = level;
 		this.levelName = levelName;
 		
-		options.put("pvp", options.getOrDefault("pvp", false));
-		options.put("pickup", options.getOrDefault("pickup", false));
-		options.put("access", options.getOrDefault("access", true));
-		options.put("hide", options.getOrDefault("hide", false));
-		options.put("message", options.getOrDefault("message", null));
-		
-		this.options = new HashMap<String, Object>(options);
+		this.options = new HashMap<String, Boolean>(){{
+			put("pvp", (boolean)options.getOrDefault("pvp", false));
+			put("pickup", (boolean)options.getOrDefault("pickup", true));
+			put("access", (boolean)options.getOrDefault("access", true));
+			put("hide", (boolean)options.getOrDefault("hide", false));
+		}};
 	}
 	
 	public boolean check(Position pos){
 		return pos.level == this.level
-				&& (this.start.x <= pos.x && pos.x <= this.end.x)
-				&& (this.start.y <= pos.z && pos.z <= this.end.y);
+				&& (this.start.x <= pos.getFloorX() && pos.getFloorX() <= this.end.x)
+				&& (this.start.y <= pos.getFloorZ() && pos.getFloorZ() <= this.end.y);
 	}
 	
 	public boolean hasPermission(Player player){
@@ -136,10 +135,8 @@ public class Land{
 		this.invitee.add(player);
 	}
 	
-	public void setOption(String option, Object value){
-		if(this.options.containsKey(option)){
-			this.options.put(option, value);
-		}
+	public void setOption(String option, Boolean value){
+		this.options.put(option, value);
 	}
 	
 	public void removeInvitee(String player){
@@ -148,7 +145,7 @@ public class Land{
 		this.invitee.remove(player);
 	}
 	
-	public Map<String, Object> getOptions(){
+	public Map<String, Boolean> getOptions() {
 		return this.options;
 	}
 	
@@ -156,8 +153,8 @@ public class Land{
 		return this.id;
 	}
 	
-	@SuppressWarnings("unchecked")
-	public <T> T getOption(String key, T defaultValue){
-		return (T) this.options.getOrDefault(key, defaultValue);
+	//@SuppressWarnings("unchecked")
+	public boolean getOption(String key, Boolean defaultValue) {
+		return this.options.getOrDefault(key, defaultValue);
 	}
 }
