@@ -42,6 +42,7 @@ import cn.nukkit.command.Command;
 import cn.nukkit.command.CommandSender;
 import cn.nukkit.entity.item.EntityItem;
 import cn.nukkit.event.EventHandler;
+import cn.nukkit.event.EventPriority;
 import cn.nukkit.event.Listener;
 import cn.nukkit.event.block.BlockBreakEvent;
 import cn.nukkit.event.block.BlockPistonEvent;
@@ -781,7 +782,7 @@ public class EconomyLand extends PluginBase implements Listener{
 		return false;
 	}
 	
-	@EventHandler (ignoreCancelled = true)
+	@EventHandler (ignoreCancelled = true, priority = EventPriority.LOWEST)
 	public void onBlockBreak(BlockBreakEvent event){
 		Player player = event.getPlayer();
 		Block block = event.getBlock();
@@ -829,7 +830,7 @@ public class EconomyLand extends PluginBase implements Listener{
 		}
 	}
 	
-	@EventHandler
+	@EventHandler(priority = EventPriority.LOWEST)
 	public void onPlayerInteract(PlayerInteractEvent event){
 		if(event.getAction() == PlayerInteractEvent.Action.LEFT_CLICK_AIR || event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_AIR) return;
 		
@@ -869,7 +870,7 @@ public class EconomyLand extends PluginBase implements Listener{
 		}
 	}
 	
-	@EventHandler
+	@EventHandler(priority = EventPriority.LOWEST)
 	public void onBlockPlace(BlockPlaceEvent event){
 		Player player = event.getPlayer();
 		
