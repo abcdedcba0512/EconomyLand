@@ -764,11 +764,11 @@ public class EconomyLand extends PluginBase implements Listener{
 					return true;
 				}
 				
-				StringBuilder builder = new StringBuilder(this.getMessage("options-tag", new Object[]{id}) + "\n");
+				StringBuilder builder = new StringBuilder(this.getMessage("prefix")+this.getMessage("options-tag", new Object[]{id}) + "\n");
 				
 				Map<String, Boolean> options = land.getOptions();
 				for(String option : options.keySet()){
-					builder.append(" §f- §7" + option + TextFormat.WHITE + "§f: "+(options.get(option) ? "§b" : "§c")+ options.get(option).toString() + "\n");
+					builder.append(" §f- §7" + option + TextFormat.WHITE + "§f: "+(options.get(option) ? "§a" : "§c")+ options.get(option).toString() + "\n");
 				}
 				
 				sender.sendMessage(builder.substring(0, builder.length() - 1));
