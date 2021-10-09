@@ -782,7 +782,7 @@ public class EconomyLand extends PluginBase implements Listener{
 		return false;
 	}
 	
-	@EventHandler (ignoreCancelled = true, priority = EventPriority.LOWEST)
+	@EventHandler (ignoreCancelled = true)
 	public void onBlockBreak(BlockBreakEvent event){
 		Player player = event.getPlayer();
 		Block block = event.getBlock();
@@ -830,7 +830,7 @@ public class EconomyLand extends PluginBase implements Listener{
 		}
 	}
 	
-	@EventHandler(priority = EventPriority.LOWEST)
+	@EventHandler
 	public void onPlayerInteract(PlayerInteractEvent event){
 		if(event.getAction() == PlayerInteractEvent.Action.LEFT_CLICK_AIR || event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_AIR) return;
 		
@@ -870,7 +870,7 @@ public class EconomyLand extends PluginBase implements Listener{
 		}
 	}
 	
-	@EventHandler(priority = EventPriority.LOWEST)
+	@EventHandler
 	public void onBlockPlace(BlockPlaceEvent event){
 		Player player = event.getPlayer();
 		
