@@ -1,18 +1,18 @@
 # Your preferred language (eng, kor, jpn, chs)
-language: eng
+language: jpn
 
 minimum-land: 25
 query-min-length: 3
 price:
-  per-block: 100
+  per-block: 30
 # White world protection can make players not able to modify land before buying
-white-world-protection: []
+white-world-protection: ["life1", "life2", "life3", "life-test", "lobby", "resource"]
 
 # Shows message if player tries to modify white world
 show-white-world-message: true
 
 # Worlds which are forbidden to buy
-buy-enable-worlds: []
+buy-enable-worlds: ["life1", "life2", "life3", "life-test"]
 
 # Prevent liquid from flowing to other land
 block-flowing: true
