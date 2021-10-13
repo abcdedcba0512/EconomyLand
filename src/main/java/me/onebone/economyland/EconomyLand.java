@@ -318,7 +318,7 @@ public class EconomyLand extends PluginBase implements Listener{
 					return true;
 				}
 				
-				double price = (Math.abs(player.getFloorX() - pos1.getFloorX()) + 1) * (Math.abs(player.getFloorZ() - pos1.getFloorZ()) + 1) * this.getConfig().getDouble("price.per-block", 100D);
+				double price = (Math.abs(pos2.getFloorX() - pos1.getFloorX()) + 1) * (Math.abs(pos2.getFloorZ() - pos1.getFloorZ()) + 1) * this.getConfig().getDouble("price.per-block", 100D);
 				if(this.api.myMoney(player) >= price){
 					try{
 						int id = this.addLand(pos1, pos2, pos1.level, player.getName(), price);
