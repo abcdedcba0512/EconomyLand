@@ -42,7 +42,6 @@ import cn.nukkit.command.Command;
 import cn.nukkit.command.CommandSender;
 import cn.nukkit.entity.item.EntityItem;
 import cn.nukkit.event.EventHandler;
-import cn.nukkit.event.EventPriority;
 import cn.nukkit.event.Listener;
 import cn.nukkit.event.block.BlockBreakEvent;
 import cn.nukkit.event.block.BlockPistonEvent;
@@ -101,7 +100,7 @@ public class EconomyLand extends PluginBase implements Listener{
 		if((land = this.provider.checkOverlap(start, end)) != null){
 			throw new LandOverlapException("Land is overlapping", land);
 		}
-		
+	
 		int minimum = Integer.MAX_VALUE;
 		try{
 			if(this.getConfig().isInt("minimum-land")){
@@ -281,11 +280,12 @@ public class EconomyLand extends PluginBase implements Listener{
 				}
 				players.get(player)[1] = player.getPosition();
 
-				double price = (Math.abs(player.getFloorX() - pos1.getFloorX()) + 1) * (Math.abs(player.getFloorZ() - pos1.getFloorZ()) + 1) * this.getConfig().getDouble("price.per-block", 100D);
+				double price = (Math.abs(pos2.getFloorX() - pos1.getFloorX()) + 1) * (Math.abs(pos2.getFloorZ() - pos1.getFloorZ()) + 1) * this.getConfig().getDouble("price.per-block", 100D);
 				
 				sender.sendMessage(this.getMessage("prefix")+this.getMessage("pos2-set", new Object[]{
-						player.getFloorX(), player.getFloorY(), player.getFloorZ(), price
+						player.getFloorX(), player.getFloorY(), player.getFloorZ()
 				}));
+				sender.sendMessage(this.getMessage("prefix")+this.getMessage("land-buy", new Object[]{price}));
 			}else if(args[0].equals("buy")){
 				if(!(sender instanceof Player)){
 					sender.sendMessage(TextFormat.RED + "Please run this command in-game.");
@@ -313,7 +313,7 @@ public class EconomyLand extends PluginBase implements Listener{
 				
 				if(!this.getConfig().get("buy-enable-worlds", new ArrayList<String>()).contains(pos1.level.getFolderName())){
 					sender.sendMessage(this.getMessage("prefix")+this.getMessage("buying-forbidden"));
-					
+
 					removes.add(player);
 					return true;
 				}
@@ -323,7 +323,7 @@ public class EconomyLand extends PluginBase implements Listener{
 					try{
 						int id = this.addLand(pos1, pos2, pos1.level, player.getName(), price);
 						this.api.reduceMoney(player, price);
-						
+	
 						sender.sendMessage(this.getMessage("prefix")+this.getMessage("bought-land", new Object[]{id, price}));
 					}catch(LandOverlapException e){
 						sender.sendMessage(this.getMessage("prefix")+this.getMessage("land-overlap", new Object[]{
@@ -388,7 +388,7 @@ public class EconomyLand extends PluginBase implements Listener{
 					player.sendMessage(this.getMessage("prefix")+this.getMessage("no-land-here"));
 				}else{
 					player.sendMessage(this.getMessage("prefix")+this.getMessage("land-info", new Object[]{
-						land.getId(), land.getWidth(), land.getOwner()
+						land.getId(), land.getOwner(), land.getWidth()
 					}));
 				}
 			}else if(args[0].equals("give")){
@@ -448,14 +448,31 @@ public class EconomyLand extends PluginBase implements Listener{
 					sender.sendMessage(this.getMessage("prefix")+this.getMessage("query-too-short"));
 					return true;
 				}
-				
 				final String query = player.toLowerCase();
-				sender.sendMessage(this.getMessage("prefix")+this.getMessage("whose-header", new Object[]{query}));
+				List<Land> lands = this.provider.getAll().values().stream().filter(land -> 
+					!land.getOption("hide", false) && (land.getOwner().toLowerCase().startsWith(query) || land.getOwner().toLowerCase().endsWith(query))
+				)).collect(Collectors.toList()));
+				/*sender.sendMessage(this.getMessage("prefix")+this.getMessage("whose-list-header", new Object[]{query}));
 				sender.sendMessage(
 					String.join("\n", this.provider.getAll().values().stream().filter((land) -> !land.getOption("hide", false) && (land.getOwner().toLowerCase().startsWith(query) || land.getOwner().toLowerCase().endsWith(query))).map(e -> 
-						this.getMessage("invitee-list-entry", new Object[]{e.getId(), e.getWidth(), e.getOwner()})
+						this.getMessage("whose-list-entry", new Object[]{e.getId(), e.getWidth()})
 					).collect(Collectors.toList()))
-				);
+				);*/
+				int i = 1;
+				int page = 1;
+				int max = (int) Math.ceil(((double) lands.size()) / 5);
+				if(args.length > 1){
+					try{
+						page = Math.min(max, Math.max(1, Integer.parseInt(args[1])));
+					}catch(NumberFormatException e){}
+				}
+				sender.sendMessage(this.getMessage("prefix")+this.getMessage("whose-list-header", new Object[]{query, page, max}));
+				for(Land land: lands.values()) {
+					int current = (int)Math.ceil((double)(i++) / 5);
+					if(current == page) {
+						sender.sendMessage(this.getMessage("whose-list-entry", new Object[]{land.getId(), land.getWidth()}));
+					}
+				}
 			}else if(args[0].equals("list")){
 				if(!sender.hasPermission("economyland.command.land.list")){
 					sender.sendMessage(new TranslationContainer(TextFormat.RED + "%commands.generic.permission"));
@@ -478,19 +495,6 @@ public class EconomyLand extends PluginBase implements Listener{
 						sender.sendMessage(this.getMessage("land-list-entry", new Object[]{land.getId(), land.getWidth(), land.getOwner()}));
 					}
 				}
-				/*StringBuilder builder = new StringBuilder(this.getMessage("land-list-header", new Object[]{page, max}) + "\n");
-				int i = 1;
-				for(Land land : lands.values()){
-					int current = (int)Math.ceil((double)(i++) / 5);
-					
-					if(current == page){
-						builder.append(this.getMessage("land-info", new Object[]{
-								land.getId(), land.getWidth(), land.getOwner()
-						}) + "\n");
-					}else if(current > page) break;
-				}
-				
-				sender.sendMessage(builder.toString());*/
 			}else if(args[0].equals("move")){
 				if(!(sender instanceof Player)){
 					sender.sendMessage(TextFormat.RED + "Please run this command in-game.");
@@ -836,36 +840,16 @@ public class EconomyLand extends PluginBase implements Listener{
 		
 		Player player = event.getPlayer();
 		Block block = event.getBlock();
-		Item item = event.getItem();
-		if(event.getAction() != PlayerInteractEvent.Action.PHYSICAL) {
-			if(item.canBePlaced() && !block.canBeActivated() && event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK){ // placing
-				block = block.getSide(event.getFace());
-			}
-		}
 		
 		Land land;
 		if((land = this.provider.findLand(block)) != null){
 			if(!(land.hasPermission(player) || player.hasPermission("economyland.admin.modify"))){
 				event.setCancelled();
-				/*player.sendTip(this.getMessage("modify-forbidden", new Object[]{
-						land.getId(), land.getOwner()
-				}));*/
-
-				if(event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK && !block.canBeActivated() && event.getItem().canBePlaced()){
-					this.placeQueue.add(player);
-					player.sendTip(this.getMessage("modify-forbidden", new Object[]{
-						land.getId(), land.getOwner()
-					}));
-				}
 			}
 		}else if(this.getConfig().getStringList("white-world-protection").contains(block.level.getFolderName()) && !player.hasPermission("economyland.admin.modify")){
 			event.setCancelled();
 			if(this.getConfig().getBoolean("show-white-world-message", true)){
 				player.sendTip(this.getMessage("modify-whiteland"));
-			}
-			
-			if(event.getAction() == PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK && !block.canBeActivated() && event.getItem().canBePlaced()){
-				this.placeQueue.add(player);
 			}
 		}
 	}
@@ -873,13 +857,24 @@ public class EconomyLand extends PluginBase implements Listener{
 	@EventHandler
 	public void onBlockPlace(BlockPlaceEvent event){
 		Player player = event.getPlayer();
-		
-		if(this.placeQueue.contains(player)){
+		Block block = event.getBlock();
+		Land land;
+		if((land = this.provider.findLand(block)) != null){
+			if(!(land.hasPermission(player) || player.hasPermission("economyland.admin.modify"))){
+				event.setCancelled();
+				player.sendTip(this.getMessage("modify-forbidden", new Object[]{
+						land.getId(), land.getOwner()
+				}));
+			}
+		}else if(this.getConfig().getStringList("white-world-protection").contains(block.level.getFolderName()) && !player.hasPermission("economyland.admin.modify")){
 			event.setCancelled();
-			this.placeQueue.remove(player);
+			if(this.getConfig().getBoolean("show-white-world-message", true)){
+				player.sendTip(this.getMessage("modify-whiteland"));
+			}
 		}
 	}
-	
+
+
 	@EventHandler (ignoreCancelled = true)
 	public void onItemPickup(InventoryPickupItemEvent event){
 		if(event.getInventory().getHolder() instanceof Player){
